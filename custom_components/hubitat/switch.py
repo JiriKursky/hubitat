@@ -1,6 +1,6 @@
 import logging
-from . import HUBITAT_DEVICES, HubitatEntity, DOMAIN, my_debug, HAT_BINARY_SENSOR
-from homeassistant.components.binary_sensor import (ENTITY_ID_FORMAT, BinarySensorDevice, DEVICE_CLASS_MOTION)
+from . import HUBITAT_DEVICES, HubitatEntity, DOMAIN, my_debug, HAT_SWITCH
+from homeassistant.components.switch  import (ENTITY_ID_FORMAT, SwitchDevice)
 from inspect import currentframe, getframeinfo
 _LOGGER = logging.getLogger(__name__)
 
@@ -12,19 +12,14 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         return    
     
     add_entities(
-        [HubitatSensor(device)
-         for device in hass.data[HUBITAT_DEVICES][HAT_BINARY_SENSOR]], True)   
+        [HubitatSwitch(device)
+         for device in hass.data[HUBITAT_DEVICES][HAT_SWITCH]], True)   
 
-class HubitatSensor(HubitatEntity, BinarySensorDevice):
+class HubitatSwitch(HubitatEntity, SwitchDevice):
     def __init__(self, hubitat_device):
         self._state = False
         super().__init__(hubitat_device)                             
         self.entity_id = ENTITY_ID_FORMAT.format(self.entity_id)      
-                  
-    @property
-    def device_class(self):
-        """Return the class of this sensor."""
-        return DEVICE_CLASS_MOTION
 
     @property
     def name(self):
@@ -33,7 +28,7 @@ class HubitatSensor(HubitatEntity, BinarySensorDevice):
 
     @property
     def is_on(self):
-        """Return true if sensor is on."""
+        """Return true if device is on."""
         return self._state
 
     def update(self):
