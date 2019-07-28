@@ -1,0 +1,8 @@
+    {
+    "domain": "hubitat",
+    "name": "Hubitat interface",
+    "documentation": "https://github.com/JiriKursky/hubitat/",
+    "dependencies": [],
+    "codeowners": ["@JiriKursky"],
+    "requirements": []
+  }
