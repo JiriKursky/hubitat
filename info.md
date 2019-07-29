@@ -14,7 +14,7 @@ Just now supporting only two Z-Wave Fibaro devices. Motion and Wall plug
 hubitat:  
   gateways:
     url: http://192.168.0.xx/apps/api/NUM/
-    access_token: 80176acf-3196-43c0-b439-943token
+    access_token: 80176bjk-3196-47u0-b439-943token
     entities: {"293": "koupelna_pracka_67", "225": "chodba_infra_chodba_133", "321":"garaz_zasuvka_garaz_62"}
 ```
 {% endif %}
