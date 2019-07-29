@@ -1,6 +1,6 @@
 HA -> HE
 
-# WAIT for release! Will be 29.7.2019
+# Look at the releases
 
 supported devices:
 - Fibaro Motion Sensor ZW5
