@@ -8,6 +8,7 @@ Version 26.7.2019
 """
 
 import logging
+import datetime
 from collections import defaultdict
 import async_timeout
 import os
@@ -33,7 +34,15 @@ HUBITAT_TYPEMAP = {
     'Fibaro Wall Plug': HAT_SWITCH    
 }
 
+CAP_MOTION_SENSOR = 'MotionSensor'
+CAP_SWITCH = 'Switch'
+ATTR_MOTION = 'motion'
+ATTR_SWITCH = 'switch'
 
+HH_MAP_DEVICE = {
+    CAP_MOTION_SENSOR: ATTR_MOTION,
+    CAP_SWITCH: ATTR_SWITCH
+}
 
 ASYNC_TIMEOUT = 20 # Timeout for async courutine
 CONF_GATEWAYS = 'gateways'
@@ -50,6 +59,8 @@ HUBITAT_CONTROLLERS = 'hubitat_controllers'
 HUBITAT_DEVICES = 'hubitat_devices'
 
 HUBITAT_COMPONENTS = [HAT_BINARY_SENSOR, HAT_SWITCH]
+
+FIB_STATES_ON = ['on', '1', 'active', 'true']
 
 def my_debug(s):
     cf = currentframe()
@@ -83,14 +94,14 @@ CONFIG_SCHEMA = vol.Schema({
 }, extra=vol.ALLOW_EXTRA)
 
 class HubitatController():
-    """Initiate Fibaro Controller Class."""
+    """Initiate Hubitat Controller Class."""
 
     def __init__(self, hass, config):
         self.client = HubitatClient(hass, config[CONF_URL], config[CONF_ACCESS_TOKEN])
         self.hubitat_devices = None
         self.entity_map = config.get(CONF_ENTITIES)
         self.hub_serial = "1"        
-
+    
     async def async_connect(self):
         """Start the communication with the Hubitat controller."""                
         
@@ -106,8 +117,6 @@ class HubitatController():
             return True
         return False
     
-    
-
 
 async def async_setup(hass, base_config):
     gateways = base_config[DOMAIN][CONF_GATEWAYS]
@@ -135,12 +144,13 @@ class HubitatClient():
         self._url = url
         self._access_token = access_token        
         self._hass = hass
-        self._buffer = None                
+        self._buffer = None          
+        self._command = {}      
         self._loop_instance = 0
         self._loop_start = True
 
     async def _async_get(self, ask):
-        my_debug(ask)        
+        # my_debug(ask)        
         websession = async_get_clientsession(self._hass)                
         ret_val = None            
         
@@ -152,8 +162,11 @@ class HubitatClient():
                 
         if response is not None:            
             ret_val = await response.json()            
-        my_debug(ret_val)        
+        # my_debug(ret_val)        
         return ret_val
+
+    def send_command(self, device_id, command):        
+        self._command = { 'device_id': device_id, 'command': command }
 
     async def _async_get_all_info(self):
         ask = "{}devices/all?access_token={}".format(self._url, self._access_token)        
@@ -184,8 +197,16 @@ class HubitatClient():
         return None
     
     async def _loop(self, _):        
+        if self._command:
+            # http://192.168.0.77/apps/api/194/devices/[Device ID]/commands?access_token=80176acf-3196-43c0-b439-943bc5be81ad
+            ask = "{}devices/{}/{}?access_token={}".format(self._url, self._command['device_id'], self._command['command'],self._access_token)        
+            my_debug(ask)
+            await self._async_get(ask)
+            self._command = {}
         await self._async_get_all_info()
-        async_call_later(self._hass, 0.2, self._loop)
+        async_call_later(self._hass, 3, self._loop)
+
+
 
 class HubitatDevice:
     """Representation of a Hubitat device entity. Defined in controller"""
@@ -198,28 +219,49 @@ class HubitatDevice:
         self.hass = None
         self.entity_map = controller.entity_map
         self.properties = {'value': 'false', ATTR_ILLUMINANCE: 0}
+        self._was_change = True
+        self._last_change = datetime.datetime.now() 
+        
         
     def get_def(self, key):
         my_debug(self._hubitat_def[key])
         return self._hubitat_def[key]
      
-    async def update_status(self):
-        response = await self.controller.client.async_get_device_info(self._device_id)        
-        if response is not None:                        
-            if response is None:
+    async def update_status(self):        
+        if self._was_change:
+            just_now = datetime.datetime.now()
+            dif = (just_now - self._last_change).total_seconds()
+            if dif < 15.0:
+                my_debug("Entity id: {} too early {}".format(self._device_id, dif))
                 return
-            my_debug(response)
-            attributes = response['attributes']
-            my_debug(attributes)
-            
-            if ATTR_ILLUMINANCE in attributes:
-                self.properties[ATTR_ILLUMINANCE] = attributes[ATTR_ILLUMINANCE]
-            if 'motion' in attributes:
-                self.properties['value'] = attributes['motion'] != 'inactive'                                                
-            
-    def send_command(self, command):
-        pass
+        response = await self.controller.client.async_get_device_info(self._device_id)  
+        self._was_change = False
+        self.properties['value']  = '0'
 
+        if response is None:
+                return            
+            
+        capabilities = response['capabilities']                        
+        attributes = response['attributes']                        
+        if ATTR_ILLUMINANCE in attributes:
+            self.properties[ATTR_ILLUMINANCE] = attributes[ATTR_ILLUMINANCE]
+
+        if CAP_MOTION_SENSOR in capabilities:                
+            key = HH_MAP_DEVICE[CAP_MOTION_SENSOR]
+            self.properties['value'] = attributes[key]
+            return
+        if CAP_SWITCH in capabilities:
+            key = HH_MAP_DEVICE[CAP_SWITCH]
+            self.properties['value'] = attributes[key]
+            return
+            
+    def _reset_wait(self):
+        self._was_change = True
+        self._last_change = datetime.datetime.now() 
+
+    def send_command(self, command):
+        self._reset_wait()        
+        self.controller.client.send_command(self._device_id, command)        
 
 class HubitatEntity(Entity):
     """Representation of a device entity. Will pass to binary_sensor and others"""
@@ -245,11 +287,9 @@ class HubitatEntity(Entity):
         async_call_later(self.hass, 1, self._update_status)
 
     async def _update_status(self, _):
-        await self.hubitat_device.update_status()
-        my_debug('Update')
-        my_debug(self.hubitat_device.properties)
+        await self.hubitat_device.update_status()        
         self.schedule_update_ha_state(True)
-        async_call_later(self.hass, 0.2, self._update_status)
+        async_call_later(self.hass, 1, self._update_status)
 
     @property
     def should_poll(self):
@@ -264,16 +304,20 @@ class HubitatEntity(Entity):
     @property
     def current_binary_state(self):
         """Return the current binary state."""
-
-        return  self.hubitat_device.properties['value']
-    
+        if self.hubitat_device.properties['value'] in FIB_STATES_ON:
+            return True
+        else: 
+            return False
+        
     def action(self, command):        
         self.hubitat_device.send_command(command)
 
     def call_turn_on(self):
         """Turn on the Fibaro device."""
+        self.hubitat_device.properties['value'] = 'on'
         self.action("on")
 
     def call_turn_off(self):
         """Turn off the Fibaro device."""
+        self.hubitat_device.properties['value'] = 'off'
         self.action("off")

@@ -34,3 +34,15 @@ class HubitatSwitch(HubitatEntity, SwitchDevice):
     def update(self):
         """Get the latest data and update the state."""
         self._state = self.current_binary_state
+
+    def turn_on(self, **kwargs):
+        """Turn device on."""
+        my_debug("turn on")
+        self.call_turn_on()
+        self._state = True
+
+    def turn_off(self, **kwargs):
+        """Turn device off."""
+        my_debug("turn off")
+        self.call_turn_off()
+        self._state = False
