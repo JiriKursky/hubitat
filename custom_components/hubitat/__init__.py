@@ -15,7 +15,7 @@ import os
 import sys
 
 import voluptuous as vol
-from homeassistant.const import (CONF_ACCESS_TOKEN, CONF_URL, CONF_ENTITIES)
+from homeassistant.const import (CONF_ACCESS_TOKEN, CONF_ENTITIES, CONF_SCAN_INTERVAL, CONF_URL)
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -31,7 +31,8 @@ HUBITAT_ENTITY_ID = 'he_{}'
 
 HUBITAT_TYPEMAP = {
     'Fibaro Motion Sensor ZW5': HAT_BINARY_SENSOR,
-    'Fibaro Wall Plug': HAT_SWITCH    
+    'Fibaro Wall Plug': HAT_SWITCH,    
+    'Virtual Switch': HAT_SWITCH    
 }
 
 CAP_MOTION_SENSOR = 'MotionSensor'
@@ -75,7 +76,8 @@ CONFIG_SCHEMA = vol.Schema({
     DOMAIN: 
         vol.All({                        
             vol.Required(CONF_URL): cv.string,    
-            vol.Required(CONF_ACCESS_TOKEN): cv.string })
+            vol.Required(CONF_ACCESS_TOKEN): cv.string,
+            vol.Optional(CONF_SCAN_INTERVAL, default = 15): cv.positive_int })
     },  extra=vol.ALLOW_EXTRA)
 
 def check_map(value):
@@ -97,7 +99,9 @@ class HubitatController():
     """Initiate Hubitat Controller Class."""
 
     def __init__(self, hass, config):
-        self.client = HubitatClient(hass, config[CONF_URL], config[CONF_ACCESS_TOKEN])
+        scan_interval = config.get(CONF_SCAN_INTERVAL)
+        if scan_interval is None: scan_interval = 15
+        self.client = HubitatClient(hass, config[CONF_URL], config[CONF_ACCESS_TOKEN], scan_interval)
         self.hubitat_devices = None
         self.entity_map = config.get(CONF_ENTITIES)
         self.hub_serial = "1"        
@@ -140,7 +144,7 @@ async def async_setup(hass, base_config):
     
 class HubitatClient():
     """ Communication with hubitat - belongs to controller """
-    def __init__(self, hass, url, access_token):
+    def __init__(self, hass, url, access_token, scan_interval):
         self._url = url
         self._access_token = access_token        
         self._hass = hass
@@ -148,6 +152,7 @@ class HubitatClient():
         self._command = {}      
         self._loop_instance = 0
         self._loop_start = True
+        self._scan_interval = scan_interval
 
     async def _async_get(self, ask):
         # my_debug(ask)        
@@ -155,7 +160,7 @@ class HubitatClient():
         ret_val = None            
         
         try: 
-            with async_timeout.timeout(20):            
+            with async_timeout.timeout(ASYNC_TIMEOUT):            
                 response =  await websession.get(ask)                        
         except:
             response = None
@@ -184,7 +189,7 @@ class HubitatClient():
                 ret_val.append(item)        
         if self._loop_start:
             self._loop_start = False
-            async_call_later(self._hass, 5, self._loop)
+            async_call_later(self._hass, self._scan_interval, self._loop)
         return ret_val
 
     async def async_get_device_info(self, device_id):
@@ -223,8 +228,7 @@ class HubitatDevice:
         self._last_change = datetime.datetime.now() 
         
         
-    def get_def(self, key):
-        my_debug(self._hubitat_def[key])
+    def get_def(self, key):        
         return self._hubitat_def[key]
      
     async def update_status(self):        
