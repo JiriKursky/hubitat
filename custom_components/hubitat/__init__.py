@@ -32,17 +32,28 @@ HUBITAT_ENTITY_ID = 'he_{}'
 HUBITAT_TYPEMAP = {
     'Fibaro Motion Sensor ZW5': HAT_BINARY_SENSOR,
     'Fibaro Wall Plug': HAT_SWITCH,    
-    'Virtual Switch': HAT_SWITCH    
+    'Virtual Switch': HAT_SWITCH,
+    'Generic Z-Wave Lock': HAT_SWITCH
+}
+
+HUBITAT_CONTROL_MAP = {
+    'Fibaro Motion Sensor ZW5': ['off', 'on'],
+    'Fibaro Wall Plug': ['off', 'on'],
+    'Virtual Switch': ['off', 'on'],
+    'Generic Z-Wave Lock': ['unlock', 'lock']
 }
 
 CAP_MOTION_SENSOR = 'MotionSensor'
 CAP_SWITCH = 'Switch'
+CAP_LOCK = 'Lock'
 ATTR_MOTION = 'motion'
 ATTR_SWITCH = 'switch'
+ATTR_LOCK = 'lock'
 
 HH_MAP_DEVICE = {
     CAP_MOTION_SENSOR: ATTR_MOTION,
-    CAP_SWITCH: ATTR_SWITCH
+    CAP_SWITCH: ATTR_SWITCH,
+    CAP_LOCK: ATTR_LOCK
 }
 
 ASYNC_TIMEOUT = 20 # Timeout for async courutine
@@ -61,7 +72,7 @@ HUBITAT_DEVICES = 'hubitat_devices'
 
 HUBITAT_COMPONENTS = [HAT_BINARY_SENSOR, HAT_SWITCH]
 
-FIB_STATES_ON = ['on', '1', 'active', 'true']
+FIB_STATES_ON = ['on', '1', 'active', 'true', 'locked', 'lock']
 
 def my_debug(s):
     cf = currentframe()
@@ -225,9 +236,8 @@ class HubitatDevice:
         self.entity_map = controller.entity_map
         self.properties = {'value': 'false', ATTR_ILLUMINANCE: 0}
         self._was_change = True
-        self._last_change = datetime.datetime.now() 
-        
-        
+        self._last_change = datetime.datetime.now()         
+
     def get_def(self, key):        
         return self._hubitat_def[key]
      
@@ -254,6 +264,12 @@ class HubitatDevice:
             key = HH_MAP_DEVICE[CAP_MOTION_SENSOR]
             self.properties['value'] = attributes[key]
             return
+
+        if CAP_LOCK in capabilities:              
+            key = HH_MAP_DEVICE[CAP_LOCK]              
+            self.properties['value'] = attributes[key]
+            return        
+
         if CAP_SWITCH in capabilities:
             key = HH_MAP_DEVICE[CAP_SWITCH]
             self.properties['value'] = attributes[key]
@@ -282,6 +298,14 @@ class HubitatEntity(Entity):
             self.entity_id = entity_map[self._device_id]
         else:
             self.entity_id = HUBITAT_ENTITY_ID.format(self._device_id)
+        dev_type = hubitat_device.get_def('type')
+        if dev_type in HUBITAT_CONTROL_MAP:
+            self._command_off = HUBITAT_CONTROL_MAP[dev_type][0]
+            self._command_on = HUBITAT_CONTROL_MAP[dev_type][1]
+        else:
+            self._command_off = 'off'
+            self._command_on = 'on'
+    
         
         
     async def async_added_to_hass(self):
@@ -314,14 +338,15 @@ class HubitatEntity(Entity):
             return False
         
     def action(self, command):        
+        my_debug(command)
         self.hubitat_device.send_command(command)
 
     def call_turn_on(self):
         """Turn on the Fibaro device."""
-        self.hubitat_device.properties['value'] = 'on'
-        self.action("on")
+        self.hubitat_device.properties['value'] = self._command_on
+        self.action(self._command_on)
 
     def call_turn_off(self):
         """Turn off the Fibaro device."""
-        self.hubitat_device.properties['value'] = 'off'
-        self.action("off")
+        self.hubitat_device.properties['value'] = self._command_off
+        self.action(self._command_off)
