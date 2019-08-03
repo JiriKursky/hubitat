@@ -1,7 +1,7 @@
 # Hubitat Fibaro Z-Wave
 
 # Interface from HA to Hubitat
-Just now supporting only two Z-Wave Fibaro devices. Motion and Wall plug
+See readme for supported devices. Fibaro, Danalock
 
 
 {% if not installed %}
