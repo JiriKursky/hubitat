@@ -5,6 +5,7 @@ Homeassistant interface to Hubitat
 supported Z-Wave devices:
 - Fibaro Motion Sensor ZW5
 - Fibaro Wall Plug
+- Generic Z-Wave Lock (Tested on Danalock)
 - Virtual Switch
 
 Using API interface. It is working but not fast. Using of switch on / switch off is slow - 10 seconds.
