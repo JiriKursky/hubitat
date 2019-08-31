@@ -19,4 +19,4 @@ hubitat:
     entities: {"293": "bathroom_light", "225": "corridor_motion", "321":"garage_wall_plug"}
 ```
 
-<a href="https://bmc.xyz/l/hubitat" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/white_img.png" alt="Buy Me A Coffee" style="height: auto !important;width: auto !important;" ></a>
+<a href="https://www.buymeacoffee.com/JiriKursky" target="_blank"><img src="https://bmc-cdn.nyc3.digitaloceanspaces.com/BMC-button-images/custom_images/white_img.png" alt="Buy Me A Coffee" style="height: auto !important;width: auto !important;" ></a>
